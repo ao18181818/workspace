@@ -20,7 +20,7 @@ try{
  await a.setOffline(false);await p.locator('#sync').click();await p.waitForTimeout(700);await mobile.locator('#sync').click();await mobile.waitForTimeout(500);assert.equal(await mobile.locator('.note h3').filter({hasText:'离线测试'}).count(),1);
  await a.setOffline(true);await p.locator('#addCard').click();await p.locator('#editForm [name=title]').fill('冲突中的本机记录');await p.locator('#editForm .primary').click();await p.waitForTimeout(600);
  await mutate(mobile,'bump');await a.setOffline(false);await p.locator('#sync').click();await p.waitForTimeout(800);assert.match(await p.locator('#sync').textContent(),/冲突/);assert.equal(await p.locator('.note h3').filter({hasText:'冲突中的本机记录'}).count(),1);
- await p.locator('#sync').click();await p.locator('#backupConflict').click();p.once('dialog',d=>d.accept());await p.locator('#loadRemote').click();await p.waitForTimeout(600);assert.equal(await p.locator('.note h3').filter({hasText:'冲突中的本机记录'}).count(),0);
+ if(!await p.locator('#backupConflict').isVisible())await p.locator('#sync').click();await p.locator('#backupConflict').click();p.once('dialog',d=>d.accept());await p.locator('#loadRemote').click();await p.waitForTimeout(600);assert.equal(await p.locator('.note h3').filter({hasText:'冲突中的本机记录'}).count(),0);
  // Remove the offline smoke-test card from presentation screenshots.
  await mutate(p,'cleanup');await p.locator('#sync').click();await mobile.locator('#sync').click();await p.waitForTimeout(500);
  assert.equal(await mobile.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);

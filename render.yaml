@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: nanxi-start
+    runtime: node
+    region: singapore
+    plan: 0.5c-512mb
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: nanxi-start-db
+          property: connectionString
+      - key: SETUP_KEY
+        generateValue: true
+databases:
+  - name: nanxi-start-db
+    region: singapore
+    plan: 0.1c-256mb
+    diskSizeGB: 1
+    postgresMajorVersion: '18'
+    ipAllowList: []

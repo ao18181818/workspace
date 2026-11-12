@@ -1,0 +1,68 @@
+name: nanxi-start
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 5m
+    max-file: '3'
+services:
+  db:
+    image: postgres:18-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: nanxi
+      POSTGRES_USER: nanxi
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Generate .env first}
+    command: [postgres, -c, shared_buffers=64MB, -c, max_connections=30]
+    volumes:
+      - pg_data:/var/lib/postgresql
+    networks: [database]
+    mem_limit: 512m
+    logging: *logging
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U nanxi -d nanxi']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: '3000'
+      DATABASE_URL: postgres://nanxi:${POSTGRES_PASSWORD:?Generate .env first}@db:5432/nanxi
+      SETUP_KEY: ${SETUP_KEY:?Generate .env first}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [web, database]
+    mem_limit: 384m
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: [no-new-privileges:true]
+    logging: *logging
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?Set your real domain in .env}
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./deploy/aliyun/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+    networks: [web]
+    mem_limit: 128m
+    logging: *logging
+networks:
+  web:
+  database:
+    internal: true
+volumes:
+  pg_data:
+  caddy_data:
+  caddy_config:

@@ -28,6 +28,18 @@ jobs:
       - run: npm test
         env:
           DATABASE_URL: postgres://postgres:ci-only-password@localhost:5432/nanxi_test
+      - name: Validate Aliyun container deployment
+        env:
+          APP_DOMAIN: start.example.com
+          POSTGRES_PASSWORD: ci-only-container-password
+          SETUP_KEY: ci-only-container-setup-key
+        run: |
+          docker compose config --quiet
+          docker compose build app
+          trap 'docker compose down' EXIT
+          docker compose up -d db app --wait
+          docker compose exec -T app node -e "fetch('http://127.0.0.1:3000/api/status').then(async r=>{const s=await r.json();if(!r.ok||s.authenticated||s.initialized)process.exit(1)}).catch(()=>process.exit(1))"
+          docker compose run --rm --no-deps caddy caddy validate --config /etc/caddy/Caddyfile
       - run: npx playwright install --with-deps chromium
       - run: node test/browser.mjs
       - uses: actions/upload-artifact@v4

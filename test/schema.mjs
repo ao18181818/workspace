@@ -1,0 +1,2 @@
+import Ajv from 'ajv/dist/2020.js';import addFormats from 'ajv-formats';import YAML from 'yaml';import fs from 'node:fs';
+const schema=await fetch('https://render.com/schema/render.yaml.json').then(r=>{if(!r.ok)throw Error('Schema fetch failed');return r.json()});const ajv=new Ajv({strict:false,allErrors:true});addFormats(ajv);const validate=ajv.compile(schema);if(!validate(YAML.parse(fs.readFileSync('render.yaml','utf8')))){console.error(validate.errors);process.exit(1)}console.log('Render JSON schema validation passed');

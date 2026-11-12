@@ -1,0 +1,31 @@
+import {chromium} from '@playwright/test';import assert from 'node:assert/strict';import {spawn} from 'node:child_process';import {mkdtemp,rm,mkdir} from 'node:fs/promises';import os from 'node:os';
+const dir=await mkdtemp(os.tmpdir()+'/nanxi-browser-');const base='http://127.0.0.1:3199';
+const server=spawn(process.execPath,['server.mjs'],{env:{...process.env,PORT:'3199',LOCAL_DB:dir+'/test.sqlite',SETUP_KEY:'browser-test-key'},stdio:['ignore','pipe','pipe']});
+await new Promise((r,j)=>{server.stdout.once('data',r);server.on('exit',()=>j(Error('server failed')))});
+const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||chromium.executablePath(),headless:true,args:['--no-sandbox']});
+const a=await browser.newContext({viewport:{width:1440,height:1040}}),b=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+const p=await a.newPage(),mobile=await b.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));mobile.on('pageerror',e=>errors.push(e.message));
+const mutate=async(page,fn)=>page.evaluate(async(fn)=>{const r=await fetch('/api/state'),v=await r.json();Function('state',fn)(v.data);const result=await fetch('/api/state',{method:'PUT',headers:{'Content-Type':'application/json','X-Requested-With':'NanxiStart'},body:JSON.stringify({version:v.version,data:v.data})});if(!result.ok)throw Error('seed save failed')},fn);
+try{
+ await p.goto(base);await p.locator('[name=email]').fill('test@example.com');await p.locator('[name=password]').fill('browser-test-password');await p.locator('[name=key]').fill('browser-test-key');await p.locator('#authForm button').click();await p.locator('#app').waitFor({state:'visible'});
+ await p.locator('#addCategory').click();await p.locator('#editForm [name=name]').fill('日常工具');await p.locator('#editForm .primary').click();await p.waitForTimeout(700);
+ await p.locator('#addBookmark').click();await p.locator('#editForm [name=title]').fill('百度地图');await p.locator('#editForm [name=url]').fill('map.baidu.com');await p.locator('#editForm [name=category]').selectOption({label:'日常工具'});await p.locator('#editForm .primary').click();await p.waitForTimeout(700);
+ await p.locator('#addCard').click();await p.locator('#editForm [name=title]').fill('拍摄前，检查这几件事');await p.locator('#editForm [name=body]').fill('手机充满电，清理镜头。\n带上充电宝和收音设备，出门前再看一遍天气。');await p.locator('#editForm .primary').click();await p.waitForTimeout(700);
+ await p.locator('#addCard').click();await p.locator('#editForm [name=type]').selectOption('todo');await p.locator('#editForm [name=color]').selectOption('sage');await p.locator('#editForm [name=title]').fill('整理本周的选题');await p.locator('#editForm [name=body]').fill('把收藏的参考内容看一遍，选出下周想拍的三个方向。');await p.locator('#editForm .primary').click();await p.waitForTimeout(700);
+ await p.locator('#addCard').click();await p.locator('#editForm [name=color]').selectOption('sand');await p.locator('#editForm [name=title]').fill('一个标题的小想法');await p.locator('#editForm [name=body]').fill('先说清读者关心的事，再放进自己的经历。\n\n试着从一个具体场景开头。');await p.locator('#editForm .primary').click();await p.waitForTimeout(700);
+ await p.locator('#settings').click();await p.locator('#newEngine').click();await p.locator('#editForm [name=name]').fill('DuckDuckGo');await p.locator('#editForm [name=url]').fill('https://duckduckgo.com/?q={q}');await p.locator('#editForm .primary').click();await p.waitForTimeout(700);assert.equal(await p.locator('#engineTabs button').filter({hasText:'DuckDuckGo'}).count(),1);
+ await mobile.goto(base);await mobile.locator('[name=email]').fill('test@example.com');await mobile.locator('[name=password]').fill('browser-test-password');await mobile.locator('#authForm button').click();await mobile.locator('#app').waitFor({state:'visible'});assert.equal(await mobile.locator('.note').count(),3);
+ await mobile.locator('[data-done]').check();await mobile.waitForTimeout(900);await p.locator('#sync').click();await p.waitForTimeout(500);assert.equal(await p.locator('.note.done').count(),1);
+ await a.setOffline(true);await p.locator('#addCard').click();await p.locator('#editForm [name=title]').fill('离线测试');await p.locator('#editForm .primary').click();await p.waitForTimeout(700);assert.match(await p.locator('#sync').textContent(),/离线|失败/);
+ await a.setOffline(false);await p.locator('#sync').click();await p.waitForTimeout(700);await mobile.locator('#sync').click();await mobile.waitForTimeout(500);assert.equal(await mobile.locator('.note h3').filter({hasText:'离线测试'}).count(),1);
+ await a.setOffline(true);await p.locator('#addCard').click();await p.locator('#editForm [name=title]').fill('冲突中的本机记录');await p.locator('#editForm .primary').click();await p.waitForTimeout(600);
+ await mutate(mobile,"state.settings.name='南西'");await a.setOffline(false);await p.locator('#sync').click();await p.waitForTimeout(800);assert.match(await p.locator('#sync').textContent(),/冲突/);assert.equal(await p.locator('.note h3').filter({hasText:'冲突中的本机记录'}).count(),1);
+ await p.locator('#sync').click();await p.locator('#backupConflict').click();p.once('dialog',d=>d.accept());await p.locator('#loadRemote').click();await p.waitForTimeout(600);assert.equal(await p.locator('.note h3').filter({hasText:'冲突中的本机记录'}).count(),0);
+ // Remove the offline smoke-test card from presentation screenshots.
+ await mutate(p,"state.cards=state.cards.filter(c=>c.title!=='离线测试')");await p.locator('#sync').click();await mobile.locator('#sync').click();await p.waitForTimeout(500);
+ assert.equal(await mobile.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+ await mkdir('docs',{recursive:true});await p.screenshot({path:'docs/desktop.png',fullPage:true});await mobile.screenshot({path:'docs/mobile.png',fullPage:true});
+ await p.locator('#settings').click();await p.locator('#settingsForm [name=theme]').selectOption('dark');await p.locator('#settingsForm .primary').click();assert.equal(await p.locator('html').getAttribute('class'),'dark');
+ await p.locator('#homepageHelp').click();assert.equal(await p.locator('#dialogTitle').textContent(),'把起点放到手边');
+ assert.deepEqual(errors,[]);console.log('Browser checks passed: CRUD, two devices, offline recovery, conflict, mobile overflow, settings.');
+}finally{await browser.close();server.kill();await new Promise(r=>server.once('exit',r));await rm(dir,{recursive:true,force:true})}

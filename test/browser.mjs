@@ -5,7 +5,7 @@ await new Promise((r,j)=>{server.stdout.once('data',r);server.on('exit',()=>j(Er
 const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||chromium.executablePath(),headless:true,args:['--no-sandbox']});
 const a=await browser.newContext({viewport:{width:1440,height:1040}}),b=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
 const p=await a.newPage(),mobile=await b.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));mobile.on('pageerror',e=>errors.push(e.message));
-const mutate=async(page,fn)=>page.evaluate(async(fn)=>{const r=await fetch('/api/state'),v=await r.json();Function('state',fn)(v.data);const result=await fetch('/api/state',{method:'PUT',headers:{'Content-Type':'application/json','X-Requested-With':'NanxiStart'},body:JSON.stringify({version:v.version,data:v.data})});if(!result.ok)throw Error('seed save failed')},fn);
+const mutate=async(page,fn)=>page.evaluate(async(fn)=>{const r=await fetch('/api/state'),v=await r.json();if(fn==='bump')v.data.settings.name='南西';if(fn==='cleanup')v.data.cards=v.data.cards.filter(c=>c.title!=='离线测试');const result=await fetch('/api/state',{method:'PUT',headers:{'Content-Type':'application/json','X-Requested-With':'NanxiStart'},body:JSON.stringify({version:v.version,data:v.data})});if(!result.ok)throw Error('seed save failed')},fn);
 try{
  await p.goto(base);await p.locator('[name=email]').fill('test@example.com');await p.locator('[name=password]').fill('browser-test-password');await p.locator('[name=key]').fill('browser-test-key');await p.locator('#authForm button').click();await p.locator('#app').waitFor({state:'visible'});
  await p.locator('#addCategory').click();await p.locator('#editForm [name=name]').fill('日常工具');await p.locator('#editForm .primary').click();await p.waitForTimeout(700);
@@ -19,10 +19,10 @@ try{
  await a.setOffline(true);await p.locator('#addCard').click();await p.locator('#editForm [name=title]').fill('离线测试');await p.locator('#editForm .primary').click();await p.waitForTimeout(700);assert.match(await p.locator('#sync').textContent(),/离线|失败/);
  await a.setOffline(false);await p.locator('#sync').click();await p.waitForTimeout(700);await mobile.locator('#sync').click();await mobile.waitForTimeout(500);assert.equal(await mobile.locator('.note h3').filter({hasText:'离线测试'}).count(),1);
  await a.setOffline(true);await p.locator('#addCard').click();await p.locator('#editForm [name=title]').fill('冲突中的本机记录');await p.locator('#editForm .primary').click();await p.waitForTimeout(600);
- await mutate(mobile,"state.settings.name='南西'");await a.setOffline(false);await p.locator('#sync').click();await p.waitForTimeout(800);assert.match(await p.locator('#sync').textContent(),/冲突/);assert.equal(await p.locator('.note h3').filter({hasText:'冲突中的本机记录'}).count(),1);
+ await mutate(mobile,'bump');await a.setOffline(false);await p.locator('#sync').click();await p.waitForTimeout(800);assert.match(await p.locator('#sync').textContent(),/冲突/);assert.equal(await p.locator('.note h3').filter({hasText:'冲突中的本机记录'}).count(),1);
  await p.locator('#sync').click();await p.locator('#backupConflict').click();p.once('dialog',d=>d.accept());await p.locator('#loadRemote').click();await p.waitForTimeout(600);assert.equal(await p.locator('.note h3').filter({hasText:'冲突中的本机记录'}).count(),0);
  // Remove the offline smoke-test card from presentation screenshots.
- await mutate(p,"state.cards=state.cards.filter(c=>c.title!=='离线测试')");await p.locator('#sync').click();await mobile.locator('#sync').click();await p.waitForTimeout(500);
+ await mutate(p,'cleanup');await p.locator('#sync').click();await mobile.locator('#sync').click();await p.waitForTimeout(500);
  assert.equal(await mobile.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
  await mkdir('docs',{recursive:true});await p.screenshot({path:'docs/desktop.png',fullPage:true});await mobile.screenshot({path:'docs/mobile.png',fullPage:true});
  await p.locator('#settings').click();await p.locator('#settingsForm [name=theme]').selectOption('dark');await p.locator('#settingsForm .primary').click();assert.equal(await p.locator('html').getAttribute('class'),'dark');
